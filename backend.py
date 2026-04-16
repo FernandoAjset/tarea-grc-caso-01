@@ -26,6 +26,7 @@ DEFAULT_SUSPECTS = {
 }
 
 CRITICAL_EVENTS = {"DELETE", "EXPORT"}
+KNOWN_EVENTS = {"LOGIN", "ACCESS", "QUERY", "EXPORT", "DELETE"}
 
 
 def ensure_data_files() -> None:
@@ -117,9 +118,11 @@ def parse_log_line(line: str) -> dict:
 	raw = line.strip()
 	if not raw:
 		return {"is_valid": False, "raw": line, "error": "Línea vacía"}
+	if "\x00" in line:
+		return {"is_valid": False, "raw": raw, "error": "Contiene caracteres no permitidos"}
 
 	parts = [p.strip() for p in raw.split("|")]
-	if len(parts) < 2:
+	if len(parts) < 3:
 		return {"is_valid": False, "raw": raw, "error": "Formato incompleto"}
 
 	timestamp_raw = parts[0]
@@ -133,8 +136,15 @@ def parse_log_line(line: str) -> dict:
 		}
 
 	event = parts[1].upper()
+	if not event:
+		return {"is_valid": False, "raw": raw, "error": "Evento vacío"}
+	if event not in KNOWN_EVENTS:
+		return {"is_valid": False, "raw": raw, "error": f"Evento no soportado: {event}"}
+
 	detail_items = parts[2:]
 	detail_text = " | ".join(detail_items) if detail_items else ""
+	if not detail_text.strip():
+		return {"is_valid": False, "raw": raw, "error": "Detalle vacío"}
 
 	user = None
 	ip = None
@@ -143,6 +153,12 @@ def parse_log_line(line: str) -> dict:
 			user = item.split("=", 1)[1].strip()
 		if item.lower().startswith("ip="):
 			ip = item.split("=", 1)[1].strip()
+
+	if event == "LOGIN":
+		if not user:
+			return {"is_valid": False, "raw": raw, "error": "LOGIN requiere campo user"}
+		if not ip:
+			return {"is_valid": False, "raw": raw, "error": "LOGIN requiere campo ip"}
 
 	return {
 		"is_valid": True,
@@ -172,10 +188,16 @@ def analyze_logs(log_lines: list[str]) -> dict:
 	# Contexto temporal para asociar eventos sin user explícito.
 	current_user = None
 
-	for line in log_lines:
+	for index, line in enumerate(log_lines, start=1):
 		item = parse_log_line(line)
 		if not item["is_valid"]:
-			invalid.append(item)
+			invalid.append(
+				{
+					"linea": index,
+					"error": item.get("error", "Error de validación"),
+					"raw": item.get("raw", line),
+				}
+			)
 			continue
 
 		if item["event"] == "LOGIN" and item.get("user"):
@@ -299,6 +321,10 @@ def analyze_logs(log_lines: list[str]) -> dict:
 		},
 		"qa_answers": qa_answers,
 		"invalid_lines": invalid,
+		"validation": {
+			"has_errors": len(invalid) > 0,
+			"error_count": len(invalid),
+		},
 	}
 
 
@@ -424,7 +450,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 		# Retardo controlado para exponer barra de progreso en frontend.
 		time_module.sleep(2.5)
 
-		lines = [line for line in str(logs_text).splitlines() if line.strip()]
+		lines = str(logs_text).splitlines()
 		result = analyze_logs(lines)
 		self._send_json(result)
 

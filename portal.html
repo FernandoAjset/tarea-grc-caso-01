@@ -103,6 +103,12 @@
 
 			<section id="kpis" class="mb-8 grid gap-4 md:grid-cols-4"></section>
 
+			<section id="validationPanel" class="mb-8 hidden rounded-2xl border border-rose-700/50 bg-rose-950/20 p-5">
+				<h3 class="text-lg font-semibold text-rose-200">Validación del archivo</h3>
+				<p id="validationSummary" class="mt-2 text-sm text-rose-100"></p>
+				<div id="validationTable" class="mt-3 overflow-auto"></div>
+			</section>
+
 			<section class="mb-8 grid gap-4 lg:grid-cols-2">
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
 					<h3 class="text-lg font-semibold">Análisis requerido</h3>
@@ -116,21 +122,33 @@
 			</section>
 
 			<section class="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-				<h3 class="text-lg font-semibold">1) Parser de logs</h3>
-				<div id="parserTable" class="mt-4 overflow-auto"></div>
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<h3 class="text-lg font-semibold">1) Parser de logs</h3>
+					<input id="filterParser" type="text" placeholder="Buscar en parser" class="w-56 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+				</div>
+				<div id="parserTable" class="mt-4"></div>
 			</section>
 
 			<section class="mb-8 grid gap-4 lg:grid-cols-3">
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<h3 class="text-lg font-semibold">2) Eventos críticos</h3>
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<h3 class="text-lg font-semibold">2) Eventos críticos</h3>
+						<input id="filterCritical" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+					</div>
 					<div id="criticalList" class="mt-4 space-y-2"></div>
 				</article>
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<h3 class="text-lg font-semibold">3) Usuarios sospechosos</h3>
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<h3 class="text-lg font-semibold">3) Usuarios sospechosos</h3>
+						<input id="filterSuspicious" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+					</div>
 					<div id="suspiciousList" class="mt-4 space-y-2"></div>
 				</article>
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<h3 class="text-lg font-semibold">4) Fuera de horario</h3>
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<h3 class="text-lg font-semibold">4) Fuera de horario</h3>
+						<input id="filterOffhours" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+					</div>
 					<div id="offhoursList" class="mt-4 space-y-2"></div>
 				</article>
 			</section>
@@ -145,6 +163,28 @@
 			let isAnalyzing = false;
 			let progressTimer = null;
 			let suspectsUsers = [];
+			let activeRenderFn = null;
+			const pageState = {
+				parser: 1,
+				critical: 1,
+				suspicious: 1,
+				offhours: 1,
+				invalid: 1,
+			};
+			const PAGE_SIZE = {
+				parser: 8,
+				critical: 4,
+				suspicious: 4,
+				offhours: 4,
+				invalid: 6,
+			};
+            const filters = {
+                parser: "",
+                critical: "",
+                suspicious: "",
+                offhours: "",
+                invalid: "",
+            };
 
 			async function fetchJSON(url, options = {}) {
 				const res = await fetch(url, options);
@@ -164,54 +204,153 @@
 				`;
 			}
 
-			function renderSimpleList(containerId, items, emptyText) {
+			function renderPager(key, totalItems) {
+				const currentPage = pageState[key] || 1;
+				const pageSize = PAGE_SIZE[key] || 10;
+				const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+				return `
+					<div class="mt-3 flex items-center justify-between text-xs text-slate-300">
+						<span>Página ${currentPage} de ${totalPages}</span>
+						<div class="flex items-center gap-2">
+							<button data-page-key="${key}" data-dir="-1" data-total-pages="${totalPages}" class="pager-btn rounded border border-slate-600 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" ${currentPage <= 1 ? "disabled" : ""}>Anterior</button>
+							<button data-page-key="${key}" data-dir="1" data-total-pages="${totalPages}" class="pager-btn rounded border border-slate-600 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" ${currentPage >= totalPages ? "disabled" : ""}>Siguiente</button>
+						</div>
+					</div>
+				`;
+			}
+
+			function getPageSlice(items, key) {
+				const page = pageState[key] || 1;
+				const pageSize = PAGE_SIZE[key] || 10;
+				const start = (page - 1) * pageSize;
+				return items.slice(start, start + pageSize);
+			}
+
+			function applyFilter(items, key) {
+				const query = (filters[key] || "").trim().toLowerCase();
+				if (!query) {
+					return items;
+				}
+				return items.filter((item) => JSON.stringify(item || {}).toLowerCase().includes(query));
+			}
+
+			function ensurePageInRange(key, totalItems) {
+				const pageSize = PAGE_SIZE[key] || 10;
+				const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+				pageState[key] = Math.min(Math.max(1, pageState[key] || 1), totalPages);
+			}
+
+			function renderSimpleList(containerId, items, emptyText, key) {
 				const node = $(containerId);
-				if (!items || items.length === 0) {
+				const filteredItems = applyFilter(items || [], key);
+				ensurePageInRange(key, filteredItems.length);
+				if (!filteredItems.length) {
 					node.innerHTML = `<p class="text-slate-400">${emptyText}</p>`;
 					return;
 				}
-				node.innerHTML = items
-					.map(
-						(x) => `
-						<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-							<p class="font-medium">${x.fecha || "-"} · ${x.evento || "-"}</p>
-							<p class="text-sm text-slate-300">Usuario: ${x.usuario || "N/A"}</p>
-							<p class="text-sm text-slate-400">${x.detalle || x.raw || ""}</p>
+
+				const pageItems = getPageSlice(filteredItems, key);
+				node.innerHTML = `
+					<div class="h-[420px] flex flex-col">
+						<div class="grow overflow-hidden space-y-2">
+							${pageItems
+								.map(
+									(x) => `
+									<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+										<p class="truncate font-medium">${x.fecha || "-"} · ${x.evento || "-"}</p>
+										<p class="truncate text-sm text-slate-300">Usuario: ${x.usuario || "N/A"}</p>
+										<p class="truncate text-sm text-slate-400">${x.detalle || x.raw || ""}</p>
+									</div>
+								`,
+								)
+								.join("")}
 						</div>
-					`,
-					)
-					.join("");
+						<div>
+							${renderPager(key, filteredItems.length)}
+						</div>
+						</div>
+				`;
 			}
 
 			function renderParserTable(rows) {
 				const node = $("parserTable");
-				if (!rows || rows.length === 0) {
+				const filteredRows = applyFilter(rows || [], "parser");
+				ensurePageInRange("parser", filteredRows.length);
+				if (!filteredRows.length) {
 					node.innerHTML = `<p class="text-slate-400">Sin datos.</p>`;
 					return;
 				}
-				const body = rows
+
+				const pageRows = getPageSlice(filteredRows, "parser");
+				const body = pageRows
 					.map(
 						(r) => `
-					<tr class="border-t border-slate-800">
-						<td class="px-3 py-2">${r.fecha}</td>
-						<td class="px-3 py-2">${r.evento}</td>
-						<td class="px-3 py-2">${r.detalle || "-"}</td>
+					<tr class="h-12 border-t border-slate-800">
+						<td class="max-w-[220px] truncate px-3 py-2">${r.fecha}</td>
+						<td class="max-w-[120px] truncate px-3 py-2">${r.evento}</td>
+						<td class="max-w-[560px] truncate px-3 py-2">${r.detalle || "-"}</td>
 					</tr>
 				`,
 					)
 					.join("");
 
 				node.innerHTML = `
+					<div class="h-[460px] flex flex-col">
+						<div class="grow overflow-hidden">
+							<table class="min-w-full table-fixed text-sm">
+								<thead class="bg-slate-800 text-left">
+									<tr>
+										<th class="px-3 py-2">Fecha</th>
+										<th class="px-3 py-2">Evento</th>
+										<th class="px-3 py-2">Detalle</th>
+									</tr>
+								</thead>
+								<tbody>${body}</tbody>
+							</table>
+						</div>
+						<div>
+							${renderPager("parser", filteredRows.length)}
+						</div>
+					</div>
+				`;
+			}
+
+			function renderInvalidTable(invalidLines) {
+				const panel = $("validationPanel");
+				if (!invalidLines || invalidLines.length === 0) {
+					panel.classList.add("hidden");
+					return;
+				}
+				panel.classList.remove("hidden");
+				$("validationSummary").textContent = `Se detectaron ${invalidLines.length} líneas inválidas. Se muestran número de línea y motivo.`;
+
+				const filteredRows = applyFilter(invalidLines, "invalid");
+				ensurePageInRange("invalid", filteredRows.length);
+				const pageRows = getPageSlice(filteredRows, "invalid");
+				const body = pageRows
+					.map(
+						(item) => `
+						<tr class="border-t border-rose-900/40">
+							<td class="px-3 py-2 text-rose-100">${item.linea}</td>
+							<td class="px-3 py-2 text-rose-100">${item.error}</td>
+							<td class="px-3 py-2 text-rose-200/80">${item.raw || ""}</td>
+						</tr>
+					`,
+					)
+					.join("");
+
+				$("validationTable").innerHTML = `
 					<table class="min-w-full text-sm">
-						<thead class="bg-slate-800 text-left">
+						<thead class="bg-rose-900/40 text-left text-rose-100">
 							<tr>
-								<th class="px-3 py-2">Fecha</th>
-								<th class="px-3 py-2">Evento</th>
-								<th class="px-3 py-2">Detalle</th>
+								<th class="px-3 py-2">Línea</th>
+								<th class="px-3 py-2">Error</th>
+								<th class="px-3 py-2">Contenido</th>
 							</tr>
 						</thead>
 						<tbody>${body}</tbody>
 					</table>
+					${renderPager("invalid", filteredRows.length)}
 				`;
 			}
 
@@ -520,11 +659,26 @@
 				startProgress();
 				showDataSkeleton();
 				try {
+					pageState.parser = 1;
+					pageState.critical = 1;
+					pageState.suspicious = 1;
+					pageState.offhours = 1;
+					pageState.invalid = 1;
+
 					const data = await fetchJSON("/api/analyze", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({ logs_text: logsText }),
 					});
+
+					const renderAll = () => {
+						renderParserTable(data.analysis_1_parser);
+						renderSimpleList("criticalList", data.analysis_2_critical, "No hay eventos críticos.", "critical");
+						renderSimpleList("suspiciousList", data.analysis_3_suspicious, "No hay eventos sospechosos.", "suspicious");
+						renderSimpleList("offhoursList", data.analysis_4_offhours, "No hay eventos fuera de horario.", "offhours");
+						renderInvalidTable(data.invalid_lines || []);
+					};
+					activeRenderFn = renderAll;
 
 					$("kpis").innerHTML = [
 						card("Eventos totales", data.kpis.total_events, "slate"),
@@ -535,10 +689,14 @@
 
 					renderQA(data.qa_answers);
 					renderTimeline(data.breakdown.timeline_by_hour);
-					renderParserTable(data.analysis_1_parser);
-					renderSimpleList("criticalList", data.analysis_2_critical, "No hay eventos críticos.");
-					renderSimpleList("suspiciousList", data.analysis_3_suspicious, "No hay eventos sospechosos.");
-					renderSimpleList("offhoursList", data.analysis_4_offhours, "No hay eventos fuera de horario.");
+					renderAll();
+
+					if (data.validation?.has_errors) {
+						showToast("warning", `Se detectaron ${data.validation.error_count} líneas inválidas. Revisa la sección de validación.`);
+					}
+					if (data.kpis.total_events === 0) {
+						showToast("error", "No se encontraron líneas válidas para analizar.");
+					}
 				} finally {
 					stopProgress();
 					setBusyState(false);
@@ -578,6 +736,29 @@
 			$("saveScheduleBtn").addEventListener("click", saveSchedule);
 			$("analyzeBtn").addEventListener("click", () => analyzeSelectedFile().catch((e) => showToast("error", e.message)));
 			$("sampleBtn").addEventListener("click", () => analyzeSample().catch((e) => showToast("error", e.message)));
+			[["filterParser", "parser"], ["filterCritical", "critical"], ["filterSuspicious", "suspicious"], ["filterOffhours", "offhours"]].forEach(([id, key]) => {
+				$(id).addEventListener("input", () => {
+					filters[key] = $(id).value || "";
+					pageState[key] = 1;
+					if (typeof activeRenderFn === "function") {
+						activeRenderFn();
+					}
+				});
+			});
+			document.addEventListener("click", (event) => {
+				const btn = event.target.closest(".pager-btn");
+				if (!btn || btn.disabled) {
+					return;
+				}
+				const key = btn.getAttribute("data-page-key");
+				const dir = Number(btn.getAttribute("data-dir"));
+				const totalPages = Number(btn.getAttribute("data-total-pages") || "1");
+				const next = Math.max(1, Math.min(totalPages, (pageState[key] || 1) + dir));
+				pageState[key] = next;
+				if (typeof activeRenderFn === "function") {
+					activeRenderFn();
+				}
+			});
 
 			loadConfigAndSuspects().catch((e) => {
 				showToast("error", `Error cargando configuración: ${e.message}`);
