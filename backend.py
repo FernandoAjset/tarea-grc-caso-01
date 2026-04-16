@@ -1,4 +1,5 @@
 import json
+import os
 import time as time_module
 from collections import Counter
 from datetime import datetime, time
@@ -457,8 +458,10 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 def run() -> None:
 	ensure_data_files()
-	server = HTTPServer(("127.0.0.1", 8000), RequestHandler)
-	print("Servidor listo en http://127.0.0.1:8000")
+	host = "0.0.0.0"
+	port = int(os.getenv("PORT", "8000"))
+	server = HTTPServer((host, port), RequestHandler)
+	print(f"Servidor listo en http://{host}:{port}")
 	server.serve_forever()
 
 
