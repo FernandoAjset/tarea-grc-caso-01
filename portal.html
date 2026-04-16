@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Portal GRC - Análisis de Logs</title>
 		<script src="https://cdn.tailwindcss.com"></script>
+		<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 	</head>
 	<body class="bg-slate-950 text-slate-100">
 		<main class="mx-auto max-w-7xl p-6 md:p-10">
@@ -44,12 +45,6 @@
 								<path stroke-linecap="round" stroke-linejoin="round" d="M9 17l6-10m-3 10h6m-12 0h6" />
 							</svg>
 							Analizar archivo
-						</button>
-						<button id="sampleBtn" class="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 font-medium hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40">
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h10M7 16h6" />
-							</svg>
-							Usar sample
 						</button>
 					</div>
 					<p id="fileMsg" class="mt-2 text-sm text-slate-300"></p>
@@ -103,6 +98,17 @@
 
 			<section id="kpis" class="mb-8 grid gap-4 md:grid-cols-4"></section>
 
+			<section id="chartsSection" class="mb-8 hidden rounded-2xl border border-indigo-700/40 bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 p-5">
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<h3 class="text-lg font-semibold">Visualización ejecutiva avanzada</h3>
+				</div>
+				<div class="grid gap-4 lg:grid-cols-2">
+					<div id="chartEventMix" class="h-64 rounded-xl border border-slate-800 bg-slate-950/40"></div>
+					<div id="chartLoadPulse" class="h-64 rounded-xl border border-slate-800 bg-slate-950/40"></div>
+				</div>
+				<div id="chartRelations" class="mt-4 h-72 rounded-xl border border-slate-800 bg-slate-950/40"></div>
+			</section>
+
 			<section id="validationPanel" class="mb-8 hidden rounded-2xl border border-rose-700/50 bg-rose-950/20 p-5">
 				<h3 class="text-lg font-semibold text-rose-200">Validación del archivo</h3>
 				<p id="validationSummary" class="mt-2 text-sm text-rose-100"></p>
@@ -122,32 +128,32 @@
 			</section>
 
 			<section class="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-				<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4 md:grid-cols-[1fr_320px] md:items-center">
 					<h3 class="text-lg font-semibold">1) Parser de logs</h3>
-					<input id="filterParser" type="text" placeholder="Buscar en parser" class="w-56 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+					<input id="filterParser" type="text" placeholder="Buscar en parser" class="w-full rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-sm outline-none ring-indigo-400/0 transition focus:ring-2" />
 				</div>
 				<div id="parserTable" class="mt-4"></div>
 			</section>
 
 			<section class="mb-8 grid gap-4 lg:grid-cols-3">
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4">
 						<h3 class="text-lg font-semibold">2) Eventos críticos</h3>
-						<input id="filterCritical" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+						<input id="filterCritical" type="text" placeholder="Buscar" class="w-full rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-sm outline-none ring-indigo-400/0 transition focus:ring-2" />
 					</div>
 					<div id="criticalList" class="mt-4 space-y-2"></div>
 				</article>
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4">
 						<h3 class="text-lg font-semibold">3) Usuarios sospechosos</h3>
-						<input id="filterSuspicious" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+						<input id="filterSuspicious" type="text" placeholder="Buscar" class="w-full rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-sm outline-none ring-indigo-400/0 transition focus:ring-2" />
 					</div>
 					<div id="suspiciousList" class="mt-4 space-y-2"></div>
 				</article>
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-					<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4">
 						<h3 class="text-lg font-semibold">4) Fuera de horario</h3>
-						<input id="filterOffhours" type="text" placeholder="Buscar" class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+						<input id="filterOffhours" type="text" placeholder="Buscar" class="w-full rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-sm outline-none ring-indigo-400/0 transition focus:ring-2" />
 					</div>
 					<div id="offhoursList" class="mt-4 space-y-2"></div>
 				</article>
@@ -164,6 +170,9 @@
 			let progressTimer = null;
 			let suspectsUsers = [];
 			let activeRenderFn = null;
+			let chartEventMixInstance = null;
+			let chartLoadPulseInstance = null;
+			let chartRelationsInstance = null;
 			const pageState = {
 				parser: 1,
 				critical: 1,
@@ -373,6 +382,200 @@
 					.join("");
 			}
 
+			function initChartInstance(containerId, currentInstance) {
+				const container = $(containerId);
+				if (!container || typeof echarts === "undefined") {
+					return null;
+				}
+				if (currentInstance) {
+					currentInstance.dispose();
+				}
+				return echarts.init(container, null, { renderer: "canvas" });
+			}
+
+			function renderAdvancedCharts(data) {
+				if (typeof echarts === "undefined") {
+					return;
+				}
+
+				const EVENT_ORDER = ["LOGIN", "ACCESS", "QUERY", "EXPORT", "DELETE"];
+				const EVENT_COLORS = {
+					LOGIN: "#818cf8",
+					ACCESS: "#22c55e",
+					QUERY: "#f59e0b",
+					EXPORT: "#06b6d4",
+					DELETE: "#ef4444",
+				};
+
+				const eventsByType = data?.breakdown?.events_by_type || {};
+				const timelineByHour = data?.breakdown?.timeline_by_hour || {};
+				const suspiciousRows = data?.analysis_3_suspicious || [];
+				const criticalRows = data?.analysis_2_critical || [];
+
+				const eventSeries = EVENT_ORDER
+					.map((name) => ({
+						name,
+						value: Number(eventsByType[name] || 0),
+						itemStyle: { color: EVENT_COLORS[name] },
+					}))
+					.filter((item) => item.value > 0);
+				const hours = Object.keys(timelineByHour);
+				const hourCounts = Object.values(timelineByHour);
+
+				chartEventMixInstance = initChartInstance("chartEventMix", chartEventMixInstance);
+				chartLoadPulseInstance = initChartInstance("chartLoadPulse", chartLoadPulseInstance);
+				chartRelationsInstance = initChartInstance("chartRelations", chartRelationsInstance);
+
+				if (chartEventMixInstance) {
+					chartEventMixInstance.setOption({
+						backgroundColor: "transparent",
+						animationDuration: 1400,
+						animationEasing: "cubicOut",
+						title: {
+							text: "Matriz de eventos",
+							left: "center",
+							textStyle: { color: "#e2e8f0", fontSize: 15, fontWeight: 600 },
+						},
+						legend: {
+							bottom: 6,
+							left: "center",
+							textStyle: { color: "#94a3b8" },
+						},
+						tooltip: { trigger: "item" },
+						series: [
+							{
+								type: "pie",
+								radius: ["22%", "72%"],
+								roseType: "radius",
+								center: ["50%", "48%"],
+								itemStyle: {
+									borderRadius: 10,
+									borderColor: "#0f172a",
+									borderWidth: 2,
+								},
+								label: { color: "#cbd5e1", fontSize: 11 },
+								data: eventSeries,
+							},
+						],
+					});
+				}
+
+				if (chartLoadPulseInstance) {
+					chartLoadPulseInstance.setOption({
+						backgroundColor: "transparent",
+						animationDuration: 1500,
+						animationEasing: "quarticOut",
+						title: {
+							text: "Pulso operativo por hora",
+							left: "center",
+							textStyle: { color: "#e2e8f0", fontSize: 15, fontWeight: 600 },
+						},
+						grid: { left: 40, right: 20, top: 50, bottom: 68 },
+						xAxis: {
+							type: "category",
+							data: hours,
+							axisLabel: {
+								color: "#94a3b8",
+								showMaxLabel: true,
+								interval: 0,
+								rotate: 18,
+								formatter: (value) => {
+									const parts = String(value).split(" ");
+									return parts[1] || value;
+								},
+							},
+							axisLine: { lineStyle: { color: "#334155" } },
+						},
+						yAxis: {
+							type: "value",
+							axisLabel: { color: "#94a3b8" },
+							splitLine: { lineStyle: { color: "#1e293b" } },
+						},
+						tooltip: { trigger: "axis" },
+						series: [
+							{
+								name: "Eventos",
+								type: "line",
+								smooth: true,
+								symbol: "circle",
+								symbolSize: 9,
+								data: hourCounts,
+								lineStyle: { width: 4, color: "#818cf8" },
+								itemStyle: { color: "#a78bfa", borderWidth: 2, borderColor: "#312e81" },
+								areaStyle: {
+									color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+										{ offset: 0, color: "rgba(129,140,248,0.55)" },
+										{ offset: 1, color: "rgba(129,140,248,0.03)" },
+									]),
+								},
+							},
+						],
+					});
+				}
+
+				if (chartRelationsInstance) {
+					const userCounts = {};
+					suspiciousRows.forEach((row) => {
+						const user = row.usuario || "desconocido";
+						userCounts[user] = (userCounts[user] || 0) + 1;
+					});
+
+					const links = [];
+					const nodes = [{ id: "Sistema", name: "Sistema", symbolSize: 62, category: 0 }];
+
+					Object.entries(userCounts).forEach(([user, count]) => {
+						nodes.push({ id: `u-${user}`, name: user, symbolSize: 26 + count * 5, category: 1 });
+						links.push({ source: "Sistema", target: `u-${user}`, value: count });
+					});
+
+					const criticalByEvent = {};
+					criticalRows.forEach((row) => {
+						const ev = row.evento || "CRITICO";
+						criticalByEvent[ev] = (criticalByEvent[ev] || 0) + 1;
+					});
+
+					Object.entries(criticalByEvent).forEach(([ev, count]) => {
+						nodes.push({ id: `e-${ev}`, name: ev, symbolSize: 22 + count * 4, category: 2 });
+						links.push({ source: "Sistema", target: `e-${ev}`, value: count });
+					});
+
+					chartRelationsInstance.setOption({
+						backgroundColor: "transparent",
+						animationDurationUpdate: 1400,
+						title: {
+							text: "Mapa dinámico de riesgo",
+							left: "center",
+							textStyle: { color: "#e2e8f0", fontSize: 15, fontWeight: 600 },
+						},
+						tooltip: {},
+						legend: [{
+							bottom: 8,
+							textStyle: { color: "#94a3b8" },
+							data: ["Sistema", "Usuarios", "Eventos críticos"],
+						}],
+						series: [
+							{
+								type: "graph",
+								layout: "force",
+								roam: true,
+								draggable: true,
+								label: { show: true, color: "#e2e8f0", fontSize: 11 },
+								force: { repulsion: 210, edgeLength: [80, 140], gravity: 0.12 },
+								lineStyle: { color: "#64748b", width: 1.5, opacity: 0.85, curveness: 0.2 },
+								emphasis: { focus: "adjacency" },
+								categories: [
+									{ name: "Sistema", itemStyle: { color: "#6366f1" } },
+									{ name: "Usuarios", itemStyle: { color: "#f59e0b" } },
+									{ name: "Eventos críticos", itemStyle: { color: "#ef4444" } },
+								],
+								data: nodes,
+								links,
+							},
+						],
+					});
+				}
+			}
+
 			function renderQA(qa) {
 				$("qaAnswers").innerHTML = `
 					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
@@ -552,7 +755,9 @@
 			}
 
 			function setButtonState(target, disabled) {
-				target.disabled = disabled;
+				if (target) {
+					target.disabled = disabled;
+				}
 			}
 
 			function setBusyState(busy) {
@@ -560,10 +765,18 @@
 				setButtonState($("sampleBtn"), busy);
 				setButtonState($("saveScheduleBtn"), busy);
 				setButtonState($("addSuspectBtn"), busy);
-				$("fileInput").disabled = busy;
-				$("startTime").disabled = busy;
-				$("endTime").disabled = busy;
-				$("suspectInput").disabled = busy;
+				if ($("fileInput")) {
+					$("fileInput").disabled = busy;
+				}
+				if ($("startTime")) {
+					$("startTime").disabled = busy;
+				}
+				if ($("endTime")) {
+					$("endTime").disabled = busy;
+				}
+				if ($("suspectInput")) {
+					$("suspectInput").disabled = busy;
+				}
 				updateAnalyzeButtonState();
 			}
 
@@ -658,6 +871,7 @@
 				setBusyState(true);
 				startProgress();
 				showDataSkeleton();
+				$("chartsSection").classList.add("hidden");
 				try {
 					pageState.parser = 1;
 					pageState.critical = 1;
@@ -689,6 +903,19 @@
 
 					renderQA(data.qa_answers);
 					renderTimeline(data.breakdown.timeline_by_hour);
+					$("chartsSection").classList.remove("hidden");
+					renderAdvancedCharts(data);
+					requestAnimationFrame(() => {
+						if (chartEventMixInstance) {
+							chartEventMixInstance.resize();
+						}
+						if (chartLoadPulseInstance) {
+							chartLoadPulseInstance.resize();
+						}
+						if (chartRelationsInstance) {
+							chartRelationsInstance.resize();
+						}
+					});
 					renderAll();
 
 					if (data.validation?.has_errors) {
@@ -725,17 +952,29 @@
 				showToast("success", "Análisis finalizado con archivo de ejemplo");
 			}
 
-			$("fileInput").addEventListener("change", updateAnalyzeButtonState);
-			$("addSuspectBtn").addEventListener("click", () => addSuspect().catch((e) => showToast("error", e.message)));
-			$("suspectInput").addEventListener("keydown", (event) => {
-				if (event.key === "Enter") {
-					event.preventDefault();
-					addSuspect().catch((e) => showToast("error", e.message));
-				}
-			});
-			$("saveScheduleBtn").addEventListener("click", saveSchedule);
-			$("analyzeBtn").addEventListener("click", () => analyzeSelectedFile().catch((e) => showToast("error", e.message)));
-			$("sampleBtn").addEventListener("click", () => analyzeSample().catch((e) => showToast("error", e.message)));
+			if ($("fileInput")) {
+				$("fileInput").addEventListener("change", updateAnalyzeButtonState);
+			}
+			if ($("addSuspectBtn")) {
+				$("addSuspectBtn").addEventListener("click", () => addSuspect().catch((e) => showToast("error", e.message)));
+			}
+			if ($("suspectInput")) {
+				$("suspectInput").addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						addSuspect().catch((e) => showToast("error", e.message));
+					}
+				});
+			}
+			if ($("saveScheduleBtn")) {
+				$("saveScheduleBtn").addEventListener("click", saveSchedule);
+			}
+			if ($("analyzeBtn")) {
+				$("analyzeBtn").addEventListener("click", () => analyzeSelectedFile().catch((e) => showToast("error", e.message)));
+			}
+			if ($("sampleBtn")) {
+				$("sampleBtn").addEventListener("click", () => analyzeSample().catch((e) => showToast("error", e.message)));
+			}
 			[["filterParser", "parser"], ["filterCritical", "critical"], ["filterSuspicious", "suspicious"], ["filterOffhours", "offhours"]].forEach(([id, key]) => {
 				$(id).addEventListener("input", () => {
 					filters[key] = $(id).value || "";
@@ -764,6 +1003,17 @@
 				showToast("error", `Error cargando configuración: ${e.message}`);
 			});
 			updateAnalyzeButtonState();
+			window.addEventListener("resize", () => {
+				if (chartEventMixInstance) {
+					chartEventMixInstance.resize();
+				}
+				if (chartLoadPulseInstance) {
+					chartLoadPulseInstance.resize();
+				}
+				if (chartRelationsInstance) {
+					chartRelationsInstance.resize();
+				}
+			});
 		</script>
 	</body>
 </html>
