@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Portal GRC - Análisis de Logs</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+	</head>
+	<body class="bg-slate-950 text-slate-100">
+		<main class="mx-auto max-w-7xl p-6 md:p-10">
+			<header class="mb-8">
+				<h1 class="text-3xl font-bold">Portal de análisis de incidentes</h1>
+				<p class="mt-2 text-slate-300">
+					Vista ejecutiva + técnica para análisis de logs comprometidos.
+				</p>
+			</header>
+
+			<section class="mb-8 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 md:grid-cols-2">
+				<div>
+					<h2 class="mb-3 text-lg font-semibold">1) Cargar archivo de logs</h2>
+					<div class="rounded-xl border border-slate-700/80 bg-slate-800/60 p-3">
+						<input
+							id="fileInput"
+							type="file"
+							accept=".txt,.log"
+							class="hidden"
+						/>
+						<label
+							for="fileInput"
+							class="flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-slate-600 bg-slate-900/60 px-3 py-3 transition hover:border-indigo-400 hover:bg-slate-900"
+						>
+							<span class="inline-flex items-center gap-2 text-sm text-slate-200">
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+								</svg>
+								Seleccionar archivo
+							</span>
+							<span id="selectedFileBadge" class="max-w-52 truncate rounded-full border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300">Sin archivo</span>
+						</label>
+					</div>
+					<div class="mt-3 flex flex-wrap gap-2">
+						<button id="analyzeBtn" disabled class="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 font-medium hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 17l6-10m-3 10h6m-12 0h6" />
+							</svg>
+							Analizar archivo
+						</button>
+						<button id="sampleBtn" class="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 font-medium hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h10M7 16h6" />
+							</svg>
+							Usar sample
+						</button>
+					</div>
+					<p id="fileMsg" class="mt-2 text-sm text-slate-300"></p>
+					<div id="loadingBox" class="mt-3 hidden">
+						<div class="mb-1 flex items-center justify-between text-xs text-slate-300">
+							<span>Analizando logs...</span>
+							<span id="progressText">0%</span>
+						</div>
+						<div class="h-2 w-full rounded bg-slate-800">
+							<div id="progressBar" class="h-2 w-0 rounded bg-indigo-500 transition-all duration-200"></div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<h2 class="mb-3 text-lg font-semibold">2) Rango horario de riesgo</h2>
+					<div class="grid grid-cols-2 gap-3">
+						<label class="text-sm">
+							Inicio
+							<input id="startTime" type="time" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2" />
+						</label>
+						<label class="text-sm">
+							Fin
+							<input id="endTime" type="time" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2" />
+						</label>
+					</div>
+					<div class="mt-3 flex items-center gap-3">
+						<button id="saveScheduleBtn" class="rounded-lg bg-emerald-500 px-4 py-2 font-medium hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40">
+							Guardar horario
+						</button>
+						<span id="scheduleMsg" class="text-sm text-slate-300"></span>
+					</div>
+				</div>
+			</section>
+
+			<section class="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+				<h2 class="text-lg font-semibold">Lista fija de usuarios sospechosos</h2>
+				<div class="mt-3 flex flex-wrap items-center gap-2">
+					<input
+						id="suspectInput"
+						type="text"
+						placeholder="Agregar usuario"
+						class="w-52 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+					/>
+					<button id="addSuspectBtn" class="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+						Agregar
+					</button>
+				</div>
+				<div id="suspectsList" class="mt-3 flex max-h-24 flex-wrap gap-2 overflow-y-auto"></div>
+			</section>
+
+			<section id="kpis" class="mb-8 grid gap-4 md:grid-cols-4"></section>
+
+			<section class="mb-8 grid gap-4 lg:grid-cols-2">
+				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+					<h3 class="text-lg font-semibold">Análisis requerido</h3>
+					<div id="qaAnswers" class="mt-4 space-y-3 text-slate-200"></div>
+				</article>
+
+				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+					<h3 class="text-lg font-semibold">Timeline (por hora)</h3>
+					<div id="timeline" class="mt-4 max-h-72 overflow-auto space-y-2"></div>
+				</article>
+			</section>
+
+			<section class="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+				<h3 class="text-lg font-semibold">1) Parser de logs</h3>
+				<div id="parserTable" class="mt-4 overflow-auto"></div>
+			</section>
+
+			<section class="mb-8 grid gap-4 lg:grid-cols-3">
+				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+					<h3 class="text-lg font-semibold">2) Eventos críticos</h3>
+					<div id="criticalList" class="mt-4 space-y-2"></div>
+				</article>
+				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+					<h3 class="text-lg font-semibold">3) Usuarios sospechosos</h3>
+					<div id="suspiciousList" class="mt-4 space-y-2"></div>
+				</article>
+				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+					<h3 class="text-lg font-semibold">4) Fuera de horario</h3>
+					<div id="offhoursList" class="mt-4 space-y-2"></div>
+				</article>
+			</section>
+		</main>
+
+		<div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+		<script>
+			const $ = (id) => document.getElementById(id);
+			const allowedExtensions = ["txt", "log"];
+			const allowedMimeTypes = ["", "text/plain", "application/octet-stream"];
+			let isAnalyzing = false;
+			let progressTimer = null;
+			let suspectsUsers = [];
+
+			async function fetchJSON(url, options = {}) {
+				const res = await fetch(url, options);
+				const data = await res.json();
+				if (!res.ok) {
+					throw new Error(data.error || "Error inesperado");
+				}
+				return data;
+			}
+
+			function card(title, value, tone = "slate") {
+				return `
+					<article class="rounded-2xl border border-${tone}-700 bg-${tone}-900/30 p-4">
+						<p class="text-sm text-slate-300">${title}</p>
+						<p class="mt-2 text-2xl font-bold">${value}</p>
+					</article>
+				`;
+			}
+
+			function renderSimpleList(containerId, items, emptyText) {
+				const node = $(containerId);
+				if (!items || items.length === 0) {
+					node.innerHTML = `<p class="text-slate-400">${emptyText}</p>`;
+					return;
+				}
+				node.innerHTML = items
+					.map(
+						(x) => `
+						<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+							<p class="font-medium">${x.fecha || "-"} · ${x.evento || "-"}</p>
+							<p class="text-sm text-slate-300">Usuario: ${x.usuario || "N/A"}</p>
+							<p class="text-sm text-slate-400">${x.detalle || x.raw || ""}</p>
+						</div>
+					`,
+					)
+					.join("");
+			}
+
+			function renderParserTable(rows) {
+				const node = $("parserTable");
+				if (!rows || rows.length === 0) {
+					node.innerHTML = `<p class="text-slate-400">Sin datos.</p>`;
+					return;
+				}
+				const body = rows
+					.map(
+						(r) => `
+					<tr class="border-t border-slate-800">
+						<td class="px-3 py-2">${r.fecha}</td>
+						<td class="px-3 py-2">${r.evento}</td>
+						<td class="px-3 py-2">${r.detalle || "-"}</td>
+					</tr>
+				`,
+					)
+					.join("");
+
+				node.innerHTML = `
+					<table class="min-w-full text-sm">
+						<thead class="bg-slate-800 text-left">
+							<tr>
+								<th class="px-3 py-2">Fecha</th>
+								<th class="px-3 py-2">Evento</th>
+								<th class="px-3 py-2">Detalle</th>
+							</tr>
+						</thead>
+						<tbody>${body}</tbody>
+					</table>
+				`;
+			}
+
+			function renderTimeline(data) {
+				const node = $("timeline");
+				const entries = Object.entries(data || {});
+				if (!entries.length) {
+					node.innerHTML = `<p class="text-slate-400">Sin datos.</p>`;
+					return;
+				}
+				node.innerHTML = entries
+					.map(
+						([hour, count]) => `
+					<div class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 px-3 py-2">
+						<span>${hour}</span>
+						<span class="rounded bg-indigo-500/30 px-2 py-1 text-xs">${count} eventos</span>
+					</div>
+				`,
+					)
+					.join("");
+			}
+
+			function renderQA(qa) {
+				$("qaAnswers").innerHTML = `
+					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+						<p class="font-semibold">¿Qué evento es más crítico y por qué?</p>
+						<p class="text-sm text-slate-300">${qa.evento_mas_critico.evento}: ${qa.evento_mas_critico.porque}</p>
+					</div>
+					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+						<p class="font-semibold">¿Qué riesgo representa EXPORT y DELETE?</p>
+						<p class="text-sm text-slate-300">${qa.riesgo_export_delete}</p>
+					</div>
+					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+						<p class="font-semibold">¿Qué control de gobierno falló?</p>
+						<p class="text-sm text-slate-300">${qa.control_gobierno_fallo}</p>
+					</div>
+				`;
+			}
+
+			function showToast(type, message, timeout = 3000) {
+				const toneByType = {
+					success: "border-emerald-600 bg-emerald-950/95 text-emerald-200",
+					info: "border-sky-600 bg-sky-950/95 text-sky-200",
+					warning: "border-amber-600 bg-amber-950/95 text-amber-200",
+					error: "border-rose-600 bg-rose-950/95 text-rose-200",
+				};
+				const toast = document.createElement("div");
+				toast.className = `w-80 rounded-lg border px-3 py-2 text-sm shadow-lg ${toneByType[type] || toneByType.info}`;
+				toast.textContent = message;
+				$("toastContainer").appendChild(toast);
+				setTimeout(() => {
+					toast.remove();
+				}, timeout);
+			}
+
+			function renderSuspectsList() {
+				const node = $("suspectsList");
+				if (!suspectsUsers.length) {
+					node.innerHTML = `<span class="text-sm text-slate-400">Sin usuarios definidos</span>`;
+					return;
+				}
+
+				node.innerHTML = suspectsUsers
+					.map(
+						(user) => `
+							<span class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs">
+								${user}
+								<button data-user="${user}" class="remove-suspect text-slate-300 hover:text-rose-300">Quitar</button>
+							</span>
+						`,
+					)
+					.join("");
+
+				node.querySelectorAll(".remove-suspect").forEach((btn) => {
+					btn.addEventListener("click", async (event) => {
+						if (isAnalyzing) {
+							return;
+						}
+						const user = event.currentTarget.getAttribute("data-user");
+						suspectsUsers = suspectsUsers.filter((u) => u !== user);
+						await persistSuspects();
+					});
+				});
+			}
+
+			async function persistSuspects() {
+				let payload;
+				try {
+					payload = await fetchJSON("/api/suspects", {
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ users: suspectsUsers }),
+					});
+				} catch (error) {
+					if (String(error.message || "").includes("Ruta no encontrada")) {
+						payload = await fetchJSON("/api/suspects", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ users: suspectsUsers }),
+						});
+					} else {
+						throw error;
+					}
+				}
+				suspectsUsers = payload.users;
+				renderSuspectsList();
+				showToast("success", "Lista de sospechosos actualizada");
+			}
+
+			async function addSuspect() {
+				if (isAnalyzing) {
+					return;
+				}
+				const input = $("suspectInput");
+				const user = input.value.trim().toLowerCase();
+				if (!user) {
+					showToast("warning", "Ingresa un usuario válido");
+					return;
+				}
+				if (suspectsUsers.includes(user)) {
+					showToast("info", "El usuario ya existe en la lista");
+					input.value = "";
+					return;
+				}
+				suspectsUsers.push(user);
+				input.value = "";
+				await persistSuspects();
+			}
+
+			function skeletonBlock(heightClass = "h-4") {
+				return `<div class="${heightClass} w-full rounded bg-slate-700/70"></div>`;
+			}
+
+			function showDataSkeleton() {
+				$("kpis").innerHTML = new Array(4)
+					.fill(0)
+					.map(
+						() => `
+						<article class="animate-pulse rounded-2xl border border-slate-800 bg-slate-900 p-4">
+							${skeletonBlock("h-3")}
+							<div class="mt-3">${skeletonBlock("h-8")}</div>
+						</article>
+					`,
+					)
+					.join("");
+
+				$("qaAnswers").innerHTML = `
+					<div class="animate-pulse space-y-3 rounded-lg border border-slate-800 bg-slate-800/40 p-3">
+						${skeletonBlock()}
+						${skeletonBlock("h-3")}
+						${skeletonBlock("h-3")}
+					</div>
+					<div class="animate-pulse space-y-3 rounded-lg border border-slate-800 bg-slate-800/40 p-3">
+						${skeletonBlock()}
+						${skeletonBlock("h-3")}
+					</div>
+					<div class="animate-pulse space-y-3 rounded-lg border border-slate-800 bg-slate-800/40 p-3">
+						${skeletonBlock()}
+						${skeletonBlock("h-3")}
+					</div>
+				`;
+
+				$("timeline").innerHTML = new Array(5)
+					.fill(0)
+					.map(
+						() => `
+						<div class="animate-pulse rounded-lg border border-slate-800 bg-slate-800/40 p-3">
+							${skeletonBlock()}
+						</div>
+					`,
+					)
+					.join("");
+
+				$("parserTable").innerHTML = `
+					<div class="animate-pulse space-y-2">
+						${new Array(6)
+							.fill(0)
+							.map(() => `<div class="rounded border border-slate-800 bg-slate-800/40 p-3">${skeletonBlock()}</div>`)
+							.join("")}
+					</div>
+				`;
+
+				const listSkeleton = new Array(4)
+					.fill(0)
+					.map(
+						() => `
+						<div class="animate-pulse space-y-2 rounded-lg border border-slate-800 bg-slate-800/40 p-3">
+							${skeletonBlock()}
+							${skeletonBlock("h-3")}
+							${skeletonBlock("h-3")}
+						</div>
+					`,
+					)
+					.join("");
+
+				$("criticalList").innerHTML = listSkeleton;
+				$("suspiciousList").innerHTML = listSkeleton;
+				$("offhoursList").innerHTML = listSkeleton;
+			}
+
+			function setButtonState(target, disabled) {
+				target.disabled = disabled;
+			}
+
+			function setBusyState(busy) {
+				isAnalyzing = busy;
+				setButtonState($("sampleBtn"), busy);
+				setButtonState($("saveScheduleBtn"), busy);
+				setButtonState($("addSuspectBtn"), busy);
+				$("fileInput").disabled = busy;
+				$("startTime").disabled = busy;
+				$("endTime").disabled = busy;
+				$("suspectInput").disabled = busy;
+				updateAnalyzeButtonState();
+			}
+
+			function getFileValidationError(file) {
+				if (!file) {
+					return "";
+				}
+				const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+				if (!allowedExtensions.includes(ext)) {
+					return "Tipo de archivo no permitido. Usa .txt o .log";
+				}
+				if (!allowedMimeTypes.includes(file.type)) {
+					return "Formato no válido. Debe ser texto plano.";
+				}
+				return "";
+			}
+
+			function updateAnalyzeButtonState() {
+				const file = $("fileInput").files[0];
+				const badge = $("selectedFileBadge");
+				const error = getFileValidationError(file);
+				badge.textContent = file ? file.name : "Sin archivo";
+				badge.className = file
+					? "max-w-52 truncate rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 text-xs text-indigo-200"
+					: "max-w-52 truncate rounded-full border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300";
+				$("fileMsg").textContent = error || (file ? `Archivo listo: ${file.name}` : "Selecciona un archivo .txt o .log");
+				$("fileMsg").className = error ? "mt-2 text-sm text-rose-300" : "mt-2 text-sm text-slate-300";
+				setButtonState($("analyzeBtn"), isAnalyzing || !file || Boolean(error));
+			}
+
+			function startProgress() {
+				const box = $("loadingBox");
+				const bar = $("progressBar");
+				const text = $("progressText");
+				let progress = 6;
+				box.classList.remove("hidden");
+				bar.style.width = `${progress}%`;
+				text.textContent = `${progress}%`;
+				progressTimer = setInterval(() => {
+					progress = Math.min(progress + 8, 90);
+					bar.style.width = `${progress}%`;
+					text.textContent = `${progress}%`;
+				}, 180);
+			}
+
+			function stopProgress() {
+				const bar = $("progressBar");
+				const text = $("progressText");
+				if (progressTimer) {
+					clearInterval(progressTimer);
+					progressTimer = null;
+				}
+				bar.style.width = "100%";
+				text.textContent = "100%";
+				setTimeout(() => {
+					$("loadingBox").classList.add("hidden");
+					bar.style.width = "0%";
+					text.textContent = "0%";
+				}, 250);
+			}
+
+			async function loadConfigAndSuspects() {
+				const [config, suspects] = await Promise.all([
+					fetchJSON("/api/config"),
+					fetchJSON("/api/suspects"),
+				]);
+				$("startTime").value = config.off_hours.start;
+				$("endTime").value = config.off_hours.end;
+				suspectsUsers = suspects.users || [];
+				renderSuspectsList();
+			}
+
+			async function saveSchedule() {
+				if (isAnalyzing) {
+					return;
+				}
+				const start = $("startTime").value;
+				const end = $("endTime").value;
+				try {
+					await fetchJSON("/api/config", {
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ start, end }),
+					});
+					showToast("success", "Horario guardado");
+				} catch (error) {
+					showToast("error", error.message);
+				}
+			}
+
+			async function analyze(logsText) {
+				setBusyState(true);
+				startProgress();
+				showDataSkeleton();
+				try {
+					const data = await fetchJSON("/api/analyze", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ logs_text: logsText }),
+					});
+
+					$("kpis").innerHTML = [
+						card("Eventos totales", data.kpis.total_events, "slate"),
+						card("Eventos críticos", data.kpis.critical_events, "rose"),
+						card("Eventos sospechosos", data.kpis.suspicious_events, "amber"),
+						card("Fuera de horario", data.kpis.offhours_events, "emerald"),
+					].join("");
+
+					renderQA(data.qa_answers);
+					renderTimeline(data.breakdown.timeline_by_hour);
+					renderParserTable(data.analysis_1_parser);
+					renderSimpleList("criticalList", data.analysis_2_critical, "No hay eventos críticos.");
+					renderSimpleList("suspiciousList", data.analysis_3_suspicious, "No hay eventos sospechosos.");
+					renderSimpleList("offhoursList", data.analysis_4_offhours, "No hay eventos fuera de horario.");
+				} finally {
+					stopProgress();
+					setBusyState(false);
+				}
+			}
+
+			async function analyzeSelectedFile() {
+				const file = $("fileInput").files[0];
+				if (!file) {
+					showToast("warning", "Selecciona un archivo .txt o .log");
+					return;
+				}
+				const fileError = getFileValidationError(file);
+				if (fileError) {
+					showToast("error", fileError);
+					return;
+				}
+				const text = await file.text();
+				await analyze(text);
+				showToast("success", "Análisis finalizado");
+			}
+
+			async function analyzeSample() {
+				const sample = await fetchJSON("/api/sample");
+				await analyze(sample.logs_text);
+				showToast("success", "Análisis finalizado con archivo de ejemplo");
+			}
+
+			$("fileInput").addEventListener("change", updateAnalyzeButtonState);
+			$("addSuspectBtn").addEventListener("click", () => addSuspect().catch((e) => showToast("error", e.message)));
+			$("suspectInput").addEventListener("keydown", (event) => {
+				if (event.key === "Enter") {
+					event.preventDefault();
+					addSuspect().catch((e) => showToast("error", e.message));
+				}
+			});
+			$("saveScheduleBtn").addEventListener("click", saveSchedule);
+			$("analyzeBtn").addEventListener("click", () => analyzeSelectedFile().catch((e) => showToast("error", e.message)));
+			$("sampleBtn").addEventListener("click", () => analyzeSample().catch((e) => showToast("error", e.message)));
+
+			loadConfigAndSuspects().catch((e) => {
+				showToast("error", `Error cargando configuración: ${e.message}`);
+			});
+			updateAnalyzeButtonState();
+		</script>
+	</body>
+</html>

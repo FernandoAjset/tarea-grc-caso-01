@@ -1,0 +1,8 @@
+2026-04-09 01:00:01 | LOGIN | user=admin | ip=10.0.0.1
+2026-04-09 01:00:05 | ACCESS | /secure/db
+2026-04-09 01:00:10 | QUERY | SELECT * FROM users
+2026-04-09 01:00:15 | EXPORT | users.csv
+2026-04-09 03:45:10 | LOGIN | user=guest | ip=192.168.1.50
+2026-04-09 03:45:15 | ACCESS | /secure/db
+2026-04-09 03:45:20 | DELETE | TABLE users
+ 
