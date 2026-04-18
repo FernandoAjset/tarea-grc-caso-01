@@ -12,7 +12,7 @@
 			<header class="mb-8">
 				<h1 class="text-3xl font-bold">Portal de análisis de incidentes</h1>
 				<p class="mt-2 text-slate-300">
-					Vista ejecutiva + técnica para análisis de logs comprometidos.
+					Análisis de eventos de seguridad bajo enfoque GRC — Gobierno, Riesgo y Cumplimiento.
 				</p>
 			</header>
 
@@ -96,7 +96,14 @@
 				<div id="suspectsList" class="mt-3 flex max-h-24 flex-wrap gap-2 overflow-y-auto"></div>
 			</section>
 
-			<section id="kpis" class="mb-8 grid gap-4 md:grid-cols-4"></section>
+			<div id="emptyState" class="mb-8 hidden rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
+				<svg xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-4 h-10 w-10 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-3-3v6M4.5 19.5l15-15M3 10.5A7.5 7.5 0 0110.5 3h3A7.5 7.5 0 0121 10.5v3A7.5 7.5 0 0113.5 21h-3A7.5 7.5 0 013 13.5v-3z" />
+				</svg>
+				<p id="emptyStateMsg" class="text-slate-400">Selecciona un archivo de logs para iniciar el análisis.</p>
+			</div>
+
+			<section id="kpis" class="mb-8 hidden grid gap-4 md:grid-cols-4"></section>
 
 			<section id="chartsSection" class="mb-8 hidden rounded-2xl border border-indigo-700/40 bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 p-5">
 				<div class="mb-4 flex items-center justify-between gap-3">
@@ -115,7 +122,7 @@
 				<div id="validationTable" class="mt-3 overflow-auto"></div>
 			</section>
 
-			<section class="mb-8 grid gap-4 lg:grid-cols-2">
+			<section id="qaTimelineSection" class="mb-8 hidden grid gap-4 lg:grid-cols-2">
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
 					<h3 class="text-lg font-semibold">Análisis requerido</h3>
 					<div id="qaAnswers" class="mt-4 space-y-3 text-slate-200"></div>
@@ -127,7 +134,7 @@
 				</article>
 			</section>
 
-			<section class="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+			<section id="parserSection" class="mb-8 hidden rounded-2xl border border-slate-800 bg-slate-900 p-5">
 				<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4 md:grid-cols-[1fr_320px] md:items-center">
 					<h3 class="text-lg font-semibold">1) Parser de logs</h3>
 					<input id="filterParser" type="text" placeholder="Buscar en parser" class="w-full rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-sm outline-none ring-indigo-400/0 transition focus:ring-2" />
@@ -135,7 +142,7 @@
 				<div id="parserTable" class="mt-4"></div>
 			</section>
 
-			<section class="mb-8 grid gap-4 lg:grid-cols-3">
+			<section id="analysisSection" class="mb-8 hidden grid gap-4 lg:grid-cols-3">
 				<article class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
 					<div class="mb-4 grid gap-3 border-b border-slate-800 pb-4">
 						<h3 class="text-lg font-semibold">2) Eventos críticos</h3>
@@ -209,6 +216,20 @@
 
 		<script>
 			const $ = (id) => document.getElementById(id);
+
+			const EVENT_BADGE = {
+				DELETE:  { cls: "border border-rose-500/50 bg-rose-500/15 text-rose-300",   icon: "⚠" },
+				EXPORT:  { cls: "border border-amber-500/50 bg-amber-500/15 text-amber-300", icon: "↗" },
+				LOGIN:   { cls: "border border-indigo-500/40 bg-indigo-500/10 text-indigo-300", icon: "→" },
+				ACCESS:  { cls: "border border-slate-600 bg-slate-700/40 text-slate-300",    icon: "○" },
+				QUERY:   { cls: "border border-yellow-500/40 bg-yellow-500/10 text-yellow-300", icon: "?" },
+			};
+
+			function eventBadge(evento) {
+				const e = (evento || "").toUpperCase();
+				const s = EVENT_BADGE[e] || { cls: "border border-slate-600 bg-slate-700/40 text-slate-400", icon: "·" };
+				return `<span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono font-semibold ${s.cls}">${s.icon} ${e}</span>`;
+			}
 			const allowedExtensions = ["txt", "log"];
 			const allowedMimeTypes = ["", "text/plain", "application/octet-stream"];
 			let isAnalyzing = false;
@@ -311,8 +332,11 @@
 								.map(
 									(x) => `
 									<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-										<p class="truncate font-medium">${x.fecha || "-"} · ${x.evento || "-"}</p>
-										<p class="truncate text-sm text-slate-300">Usuario: ${x.usuario || "N/A"}</p>
+										<div class="flex items-center gap-2 flex-wrap">
+											${eventBadge(x.evento)}
+											<span class="font-mono text-xs text-slate-400 truncate">${x.fecha || "-"}</span>
+										</div>
+										<p class="mt-1 truncate text-sm text-slate-300">Usuario: ${x.usuario || "N/A"}</p>
 										<p class="truncate text-sm text-slate-400">${x.detalle || x.raw || ""}</p>
 									</div>
 								`,
@@ -340,9 +364,9 @@
 					.map(
 						(r) => `
 					<tr class="h-12 border-t border-slate-800">
-						<td class="max-w-[220px] truncate px-3 py-2">${r.fecha}</td>
-						<td class="max-w-[120px] truncate px-3 py-2">${r.evento}</td>
-						<td class="max-w-[560px] truncate px-3 py-2">${r.detalle || "-"}</td>
+						<td class="max-w-[220px] truncate px-3 py-2 font-mono text-xs text-slate-400">${r.fecha}</td>
+						<td class="px-3 py-2">${eventBadge(r.evento)}</td>
+						<td class="max-w-[560px] truncate px-3 py-2 text-slate-300">${r.detalle || "-"}</td>
 					</tr>
 				`,
 					)
@@ -622,17 +646,26 @@
 			}
 
 			function renderQA(qa) {
+				const ev = (qa.evento_mas_critico.evento || "").toUpperCase();
+				const criticalCardCls = ev === "DELETE"
+					? "rounded-lg border border-rose-600/60 bg-rose-950/40 p-3"
+					: ev === "EXPORT"
+					? "rounded-lg border border-amber-600/60 bg-amber-950/30 p-3"
+					: "rounded-lg border border-slate-700 bg-slate-800 p-3";
 				$("qaAnswers").innerHTML = `
-					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-						<p class="font-semibold">¿Qué evento es más crítico y por qué?</p>
-						<p class="text-sm text-slate-300">${qa.evento_mas_critico.evento}: ${qa.evento_mas_critico.porque}</p>
+					<div class="${criticalCardCls}">
+						<div class="flex items-center gap-2 mb-1">
+							${eventBadge(ev)}
+							<p class="font-semibold">¿Qué evento es más crítico y por qué?</p>
+						</div>
+						<p class="text-sm text-slate-300">${qa.evento_mas_critico.porque}</p>
 					</div>
 					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-						<p class="font-semibold">¿Qué riesgo representa EXPORT y DELETE?</p>
+						<p class="font-semibold mb-1">¿Qué riesgo representa EXPORT y DELETE?</p>
 						<p class="text-sm text-slate-300">${qa.riesgo_export_delete}</p>
 					</div>
 					<div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-						<p class="font-semibold">¿Qué control de gobierno falló?</p>
+						<p class="font-semibold mb-1">¿Qué control de gobierno falló?</p>
 						<p class="text-sm text-slate-300">${qa.control_gobierno_fallo}</p>
 					</div>
 				`;
@@ -706,6 +739,7 @@
 				suspectsUsers = payload.users;
 				renderSuspectsList();
 				showToast("success", "Lista de sospechosos actualizada");
+				hideResults("La lista de usuarios sospechosos cambió. Carga el archivo nuevamente para actualizar el análisis.");
 			}
 
 			async function addSuspect() {
@@ -733,6 +767,9 @@
 			}
 
 			function showDataSkeleton() {
+				showResults();
+				$("chartsSection").classList.add("hidden");
+				$("validationPanel").classList.add("hidden");
 				$("kpis").innerHTML = new Array(4)
 					.fill(0)
 					.map(
@@ -907,6 +944,7 @@
 						body: JSON.stringify({ start, end }),
 					});
 					showToast("success", "Horario guardado");
+					hideResults("El rango horario cambió. Carga el archivo nuevamente para actualizar el análisis.");
 				} catch (error) {
 					showToast("error", error.message);
 				}
@@ -916,7 +954,6 @@
 				setBusyState(true);
 				startProgress();
 				showDataSkeleton();
-				$("chartsSection").classList.add("hidden");
 				try {
 					pageState.parser = 1;
 					pageState.critical = 1;
@@ -1043,6 +1080,21 @@
 					activeRenderFn();
 				}
 			});
+
+			const RESULT_SECTIONS = ["kpis", "chartsSection", "validationPanel", "qaTimelineSection", "parserSection", "analysisSection"];
+
+			function showResults() {
+				$("emptyState").classList.add("hidden");
+				RESULT_SECTIONS.forEach((id) => $(id) && $(`${id}`).classList.remove("hidden"));
+			}
+
+			function hideResults(msg) {
+				RESULT_SECTIONS.forEach((id) => $(`${id}`) && $(`${id}`).classList.add("hidden"));
+				$("emptyState").classList.remove("hidden");
+				$("emptyStateMsg").textContent = msg || "Selecciona un archivo de logs para iniciar el análisis.";
+			}
+
+			hideResults();
 
 			loadConfigAndSuspects().catch((e) => {
 				showToast("error", `Error cargando configuración: ${e.message}`);

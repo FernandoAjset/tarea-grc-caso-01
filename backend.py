@@ -265,36 +265,128 @@ def analyze_logs(log_lines: list[str]) -> dict:
 	by_event = Counter(e["event"] for e in parsed)
 	timeline = Counter(e["timestamp"].strftime("%Y-%m-%d %H:00") for e in parsed)
 
-	# Respuestas requeridas por la tarea.
-	most_critical_event = "DELETE"
-	if any(e["event"] == "DELETE" for e in parsed):
-		critical_reason = (
-			"DELETE es el evento más crítico porque compromete la integridad de datos "
-			"(destrucción o alteración irreversible), con impacto operativo, legal y de cumplimiento."
-		)
-	elif any(e["event"] == "EXPORT" for e in parsed):
+	# Respuestas requeridas por la tarea — derivadas dinámicamente de los datos.
+	deletes = [e for e in parsed if e["event"] == "DELETE"]
+	exports = [e for e in parsed if e["event"] == "EXPORT"]
+	has_delete = bool(deletes)
+	has_export = bool(exports)
+
+	susp_usernames = {(e.get("usuario") or "").strip().lower() for e in suspicious_events if e.get("usuario")}
+	offhours_timestamps = {e["fecha"] for e in offhours_events}
+
+	def _pl(n, singular, plural):
+		return singular if n == 1 else plural
+
+	# Q1
+	if has_delete:
+		most_critical_event = "DELETE"
+		sample = deletes[0]
+		who = sample.get("effective_user") or sample.get("user") or "desconocido"
+		target = sample.get("detail_text", "")
+		when = sample["timestamp"].strftime("%H:%M")
+		is_offhours = sample["timestamp_str"] in offhours_timestamps
+		is_susp = who.strip().lower() in susp_usernames
+		n = len(deletes)
+		partes = [f"DELETE es el evento más crítico de este registro."]
+		if n == 1:
+			partes.append(f"{who} eliminó {target} a las {when}.")
+		else:
+			partes.append(f"Se registraron {n} eliminaciones; la primera fue {target} por {who} a las {when}.")
+		if is_susp:
+			partes.append(f"{who} está clasificado como usuario sospechoso.")
+		if is_offhours:
+			partes.append(f"La acción ocurrió fuera del horario operativo.")
+		partes.append(f"La eliminación destruye el dato de forma definitiva e irreversible, comprometiendo la integridad y disponibilidad del sistema.")
+		critical_reason = " ".join(partes)
+	elif has_export:
 		most_critical_event = "EXPORT"
-		critical_reason = (
-			"EXPORT es el evento más crítico en este conjunto porque implica posible exfiltración "
-			"de información sensible."
-		)
+		sample = exports[0]
+		who = sample.get("effective_user") or sample.get("user") or "desconocido"
+		target = sample.get("detail_text", "")
+		n = len(exports)
+		if n == 1:
+			critical_reason = (
+				f"EXPORT es el evento más crítico registrado. "
+				f"{who} exportó {target}, extrayendo datos fuera del sistema. "
+				f"La confidencialidad quedó comprometida desde el momento de la extracción."
+			)
+		else:
+			critical_reason = (
+				f"EXPORT es el evento más crítico registrado. "
+				f"Se realizaron {n} exportaciones; la primera fue {target} por {who}. "
+				f"La confidencialidad quedó comprometida desde el momento de la extracción."
+			)
 	else:
 		most_critical_event = "N/A"
-		critical_reason = "No se detectaron eventos críticos de tipo DELETE o EXPORT."
+		critical_reason = "Los logs analizados no contienen eventos DELETE ni EXPORT."
+
+	# Q2
+	riesgo_partes = []
+	if has_export:
+		exp = exports[0]
+		exp_who = exp.get("effective_user") or exp.get("user") or "desconocido"
+		exp_target = exp.get("detail_text", "")
+		riesgo_partes.append(
+			f"La exportación de {exp_target} realizada por {exp_who} comprometió la confidencialidad: "
+			f"los datos salieron del sistema y pueden estar en manos no autorizadas."
+		)
+	if has_delete:
+		d = deletes[0]
+		del_who = d.get("effective_user") or d.get("user") or "desconocido"
+		del_target = d.get("detail_text", "")
+		riesgo_partes.append(
+			f"La eliminación de {del_target} realizada por {del_who} comprometió la integridad y disponibilidad: "
+			f"el dato fue destruido de forma definitiva."
+		)
+	if not riesgo_partes:
+		riesgo_partes.append("Los logs analizados no contienen eventos EXPORT ni DELETE.")
+	riesgo_export_delete = " ".join(riesgo_partes)
+
+	# Q3
+	criticos_por_susp = [
+		e for e in critical_events
+		if (e.get("usuario") or "").strip().lower() in susp_usernames
+	]
+	partes_q3 = []
+	if criticos_por_susp:
+		u = criticos_por_susp[0].get("usuario", "")
+		ev = criticos_por_susp[0].get("evento", "")
+		det = criticos_por_susp[0].get("detalle", "")
+		partes_q3.append(
+			f"Falló el control de mínimo privilegio: {u} ejecutó {ev} sobre {det} sin que el sistema aplicara restricción."
+		)
+	elif suspicious_events:
+		u = suspicious_events[0].get("usuario", "")
+		partes_q3.append(
+			f"Falló el control de mínimo privilegio: {u} accedió al sistema sin restricción de acceso."
+		)
+	if offhours_events:
+		n_off = len(offhours_events)
+		start_h = settings["off_hours"]["start"]
+		end_h = settings["off_hours"]["end"]
+		partes_q3.append(
+			f"Falló el control de monitoreo fuera de horario: "
+			f"{n_off} {_pl(n_off, 'evento ocurrió', 'eventos ocurrieron')} "
+			f"entre las {start_h} y las {end_h} sin bloqueo ni alerta."
+		)
+	if critical_events and not criticos_por_susp:
+		n_crit = len(critical_events)
+		partes_q3.append(
+			f"Falló el control de autorización: "
+			f"{n_crit} {_pl(n_crit, 'operación crítica fue ejecutada', 'operaciones críticas fueron ejecutadas')} "
+			f"sin aprobación previa registrada."
+		)
+	if not partes_q3:
+		partes_q3.append("Los logs analizados no presentan violaciones de controles de gobierno.")
+	control_gobierno_fallo = " ".join(partes_q3)
 
 	qa_answers = {
 		"evento_mas_critico": {
 			"evento": most_critical_event,
 			"porque": critical_reason,
 		},
-		"riesgo_export_delete": (
-			"EXPORT representa riesgo de confidencialidad (fuga de datos). "
-			"DELETE representa riesgo de integridad y disponibilidad (pérdida de información)."
-		),
-		"control_gobierno_fallo": (
-			"Fallaron controles de gobierno de acceso y monitoreo: mínimo privilegio, "
-			"segregación de funciones, alertamiento y revisión de actividades críticas."
-		),
+		"riesgo_export_delete": riesgo_export_delete,
+		"control_gobierno_fallo": control_gobierno_fallo,
 	}
 
 	# Salida estructurada para UI y reporte académico.

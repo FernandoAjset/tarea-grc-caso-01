@@ -5,4 +5,3 @@
 2026-04-09 03:45:10 | LOGIN | user=guest | ip=192.168.1.50
 2026-04-09 03:45:15 | ACCESS | /secure/db
 2026-04-09 03:45:20 | DELETE | TABLE users
- 
